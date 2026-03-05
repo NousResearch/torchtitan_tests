@@ -1,0 +1,16 @@
+# CI-specific pre-commit config (extends torchtitan's)
+# Usage: pre-commit run -c .pre-commit-config-ci.yaml --all-files
+repos:
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        args: ["-x", "-S", "warning"]
+        files: ^ci/.*\.(sh|slurm)$
+
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        args: ["-d", "{extends: relaxed, rules: {line-length: {max: 120}}}"]
+        files: ^ci/.*\.yaml$

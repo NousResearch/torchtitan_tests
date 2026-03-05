@@ -1,0 +1,89 @@
+#!/usr/bin/env bash
+# =============================================================================
+# ttci — CLI entry point for torchtitan CI/CD system
+# =============================================================================
+# Usage: ttci <command> [options]
+#
+# Symlink or alias to PATH:
+#   ln -s /home/phuc/workspace/moe/small_prs/pr009_slurm_cicd/ci/ttci ~/bin/ttci
+# =============================================================================
+
+set -euo pipefail
+
+TTCI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+TTCI_COMMANDS_DIR="${TTCI_DIR}/commands"
+TTCI_VERSION="1.0.0"
+
+# =============================================================================
+# Help
+# =============================================================================
+show_help() {
+    cat <<'EOF'
+ttci — torchtitan CI/CD CLI
+
+Usage: ttci <command> [options]
+
+Commands:
+  status       Show CI system status (cron jobs, running tests, last results)
+  run          Trigger a test run manually
+  config       View or edit configuration
+  logs         View and search run logs
+  history      Query historical run data
+  benchmark    Run or compare benchmarks
+  pr           Manage PR testing
+  quality      Run code quality checks
+  install      Set up cron jobs, pre-commit hooks, dependencies
+  uninstall    Remove cron jobs, clean up
+
+Options:
+  --help, -h   Show this help
+  --version    Show version
+
+Examples:
+  ttci status                          Show system overview
+  ttci run --force                     Trigger 1-node test run
+  ttci run --2node                     Trigger 2-node test run
+  ttci run --pr 23                     Test PR #23
+  ttci logs --follow                   Tail active job log
+  ttci history --since 7d              Show last 7 days of runs
+  ttci benchmark --list                List configured benchmarks
+  ttci pr list                         List open PRs and test status
+  ttci quality                         Run all quality checks
+  ttci install                         Set up cron + hooks + deps
+EOF
+}
+
+# =============================================================================
+# Dispatch
+# =============================================================================
+if [[ $# -eq 0 ]]; then
+    show_help
+    exit 0
+fi
+
+COMMAND="$1"
+shift
+
+case "$COMMAND" in
+    --help|-h)
+        show_help
+        exit 0
+        ;;
+    --version)
+        echo "ttci version ${TTCI_VERSION}"
+        exit 0
+        ;;
+    status|run|config|logs|history|benchmark|pr|quality|install|uninstall)
+        COMMAND_SCRIPT="${TTCI_COMMANDS_DIR}/${COMMAND}.sh"
+        if [[ ! -f "$COMMAND_SCRIPT" ]]; then
+            echo "Error: Command script not found: ${COMMAND_SCRIPT}" >&2
+            exit 1
+        fi
+        exec bash "$COMMAND_SCRIPT" "$@"
+        ;;
+    *)
+        echo "Error: Unknown command '${COMMAND}'" >&2
+        echo "Run 'ttci --help' for usage information." >&2
+        exit 1
+        ;;
+esac

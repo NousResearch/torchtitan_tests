@@ -1,0 +1,8 @@
+# CI runtime artifacts
+logs/
+state/
+data/runs.jsonl
+data/benchmarks.jsonl
+data/pr_state.json
+data/coverage.json
+*.out
