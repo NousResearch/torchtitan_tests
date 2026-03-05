@@ -11,6 +11,8 @@ ci/data/runs.jsonl
 ci/data/benchmarks.jsonl
 ci/data/pr_state.json
 ci/data/coverage.json
+ci/data/convergence_seed_checkpoint/
+ci/data/convergence_reference_loss.json
 *.out
 
 # Python

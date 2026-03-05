@@ -3,14 +3,17 @@
 # Convergence Test — deterministic loss comparison across code changes
 # =============================================================================
 # This script:
-# 1. Creates a seed checkpoint (random init weights) if one doesn't exist
-# 2. Trains for N steps from that seed with deterministic mode
-# 3. Saves per-step loss to JSON
-# 4. Compares against reference loss file (first run becomes reference)
+# 1. Creates a fixed local dataset (synthetic nanoset) if one doesn't exist
+# 2. Creates a seed checkpoint (random init weights) if one doesn't exist
+# 3. Trains for N steps from that seed with deterministic mode + fixed dataset
+# 4. Saves per-step loss to JSON
+# 5. Compares against reference loss file (first run becomes reference)
+#
+# Both the dataset and seed checkpoint are stored in ci/data/ and persist
+# across runs. They are NOT in git (too large) but are deterministically
+# generated so they can be recreated identically on any machine.
 #
 # Usage: convergence_test.sh <output_dir> [--config <toml>] [--steps N] [--seed S]
-#
-# Expects CI_DIR and TORCHTITAN_DIR to be set, or sources from common.sh
 
 set -euo pipefail
 
@@ -23,13 +26,15 @@ load_config
 # Parse arguments
 # =============================================================================
 OUTPUT_DIR="${1:?Usage: convergence_test.sh <output_dir>}"
-shift
+shift || true
 
 CONV_CONFIG=$(yaml_get "${TTCI_CONFIG}" "convergence_test.config")
 CONV_NGPU=$(yaml_get "${TTCI_CONFIG}" "convergence_test.ngpu")
 CONV_STEPS=$(yaml_get "${TTCI_CONFIG}" "convergence_test.steps")
 CONV_SEED=$(yaml_get "${TTCI_CONFIG}" "convergence_test.seed")
+CONV_DATASET_SEED=$(yaml_get "${TTCI_CONFIG}" "convergence_test.dataset_seed")
 CONV_SEED_CKPT_DIR=$(yaml_get "${TTCI_CONFIG}" "convergence_test.seed_checkpoint_dir")
+CONV_DATASET_DIR=$(yaml_get "${TTCI_CONFIG}" "convergence_test.dataset_dir")
 CONV_REF_LOSS=$(yaml_get "${TTCI_CONFIG}" "convergence_test.reference_loss_file")
 CONV_TOLERANCE=$(yaml_get "${TTCI_CONFIG}" "convergence_test.tolerance")
 
@@ -47,26 +52,41 @@ done
 CONV_NGPU="${CONV_NGPU:-8}"
 CONV_STEPS="${CONV_STEPS:-100}"
 CONV_SEED="${CONV_SEED:-42}"
+CONV_DATASET_SEED="${CONV_DATASET_SEED:-12345}"
 CONV_TOLERANCE="${CONV_TOLERANCE:-0.0}"
 
 ensure_dir "${OUTPUT_DIR}"
 ensure_dir "${CONV_SEED_CKPT_DIR}"
+ensure_dir "${CONV_DATASET_DIR}"
 
 LOSS_FILE="${OUTPUT_DIR}/step_losses.json"
 TRAIN_LOG="${OUTPUT_DIR}/convergence_train.log"
 RESULT_FILE="${OUTPUT_DIR}/convergence_result.json"
 
+cd "${TORCHTITAN_DIR}"
+source "${VENV_DIR}/bin/activate"
+
 # =============================================================================
-# Step 1: Create seed checkpoint if it doesn't exist
+# Step 1: Verify fixed dataset exists (committed in ci/data/convergence_dataset/)
+# =============================================================================
+DATASET_FILE="${CONV_DATASET_DIR}/convergence_data.ds"
+
+if [[ ! -f "${DATASET_FILE}" ]]; then
+    log_error "Convergence dataset not found at ${CONV_DATASET_DIR}!"
+    log_error "This should be committed in the repo. Run: python3 ci/scripts/create_convergence_dataset.py ${CONV_DATASET_DIR}"
+    exit 1
+fi
+
+log_info "Convergence dataset: ${CONV_DATASET_DIR} ($(du -sh "${CONV_DATASET_DIR}" | cut -f1))"
+
+# =============================================================================
+# Step 2: Create seed checkpoint if it doesn't exist
 # =============================================================================
 SEED_STEP_DIR="${CONV_SEED_CKPT_DIR}/step-0"
 
 if [[ ! -d "${SEED_STEP_DIR}" ]] || [[ -z "$(ls -A "${SEED_STEP_DIR}" 2>/dev/null)" ]]; then
     log_info "Creating seed checkpoint (random init weights)..."
     log_info "This runs once with NGPU=1 to save initial model state"
-
-    cd "${TORCHTITAN_DIR}"
-    source "${VENV_DIR}/bin/activate"
 
     NGPU=1 LOG_RANK=0 CONFIG_FILE="./${CONV_CONFIG}" \
         ./run_train.sh \
@@ -85,7 +105,7 @@ if [[ ! -d "${SEED_STEP_DIR}" ]] || [[ -z "$(ls -A "${SEED_STEP_DIR}" 2>/dev/nul
 
     if [[ ! -d "${SEED_STEP_DIR}" ]]; then
         log_error "Failed to create seed checkpoint!"
-        cat "${OUTPUT_DIR}/seed_checkpoint_creation.log" | tail -30
+        tail -30 "${OUTPUT_DIR}/seed_checkpoint_creation.log"
         exit 1
     fi
 
@@ -95,12 +115,11 @@ else
 fi
 
 # =============================================================================
-# Step 2: Run deterministic training from seed checkpoint
+# Step 3: Run deterministic training from seed checkpoint + fixed dataset
 # =============================================================================
 log_info "Running convergence test: ${CONV_STEPS} steps, seed=${CONV_SEED}, ngpu=${CONV_NGPU}"
-
-cd "${TORCHTITAN_DIR}"
-source "${VENV_DIR}/bin/activate"
+log_info "Dataset: ${CONV_DATASET_DIR}"
+log_info "Seed checkpoint: ${SEED_STEP_DIR}"
 
 RDZV_PORT=29503
 JOB_ID="${SLURM_JOB_ID:-$$}"
@@ -122,6 +141,8 @@ torchrun \
     --debug.deterministic \
     --training.steps "${CONV_STEPS}" \
     --training.dataset_random_seed 1234 \
+    --training.dataset_folders "[\"${CONV_DATASET_DIR}\"]" \
+    --training.dataset_weights "[1]" \
     --metrics.log_freq 1 \
     --metrics.enable_wandb=false \
     --metrics.enable_tensorboard=false \
@@ -139,7 +160,7 @@ fi
 log_info "Training completed. Extracting per-step loss..."
 
 # =============================================================================
-# Step 3: Extract per-step loss values from training log
+# Step 4: Extract per-step loss values from training log
 # =============================================================================
 python3 - "${TRAIN_LOG}" "${LOSS_FILE}" <<'PYEOF'
 import re, json, sys
@@ -178,7 +199,7 @@ if sorted_losses:
 PYEOF
 
 # =============================================================================
-# Step 4: Compare with reference loss file
+# Step 5: Compare with reference loss file
 # =============================================================================
 python3 - "${LOSS_FILE}" "${CONV_REF_LOSS}" "${RESULT_FILE}" "${CONV_TOLERANCE}" <<'PYEOF'
 import json, sys, os
