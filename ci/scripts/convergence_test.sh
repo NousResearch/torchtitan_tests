@@ -104,8 +104,6 @@ if [[ ! -d "${SEED_STEP_DIR}" ]] || [[ -z "$(ls -A "${SEED_STEP_DIR}" 2>/dev/nul
         --parallelism.expert_parallel_degree 1 \
         --debug.seed "${CONV_SEED}" \
         --training.steps 1 \
-        --training.dataset_folders "[\"${CONV_DATASET_DIR}\"]" \
-        --training.dataset_weights "[1]" \
         > "${OUTPUT_DIR}/seed_checkpoint_creation.log" 2>&1
 
     if [[ ! -d "${SEED_STEP_DIR}" ]]; then
@@ -146,8 +144,6 @@ torchrun \
     --debug.deterministic \
     --training.steps "${CONV_STEPS}" \
     --training.dataset_random_seed 1234 \
-    --training.dataset_folders "[\"${CONV_DATASET_DIR}\"]" \
-    --training.dataset_weights "[1]" \
     --metrics.log_freq 1 \
     --metrics.no-enable-wandb \
     --metrics.no-enable-tensorboard \
