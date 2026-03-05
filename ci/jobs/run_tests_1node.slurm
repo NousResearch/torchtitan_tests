@@ -307,7 +307,6 @@ torchrun --nnodes=1 --nproc_per_node=${BENCH_NGPU:-8} \
     -m torchtitan.train --job.config_file ${BENCH_CONFIG} \
     --training.steps ${BENCH_STEPS:-20} \
     --job.dump_folder ${BENCH_LOG_DIR} \
-    --metrics.no-enable-wandb \
     --metrics.log_freq 1 \
     ${BENCH_EXTRA}"
 

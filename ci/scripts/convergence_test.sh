@@ -145,7 +145,6 @@ torchrun \
     --training.steps "${CONV_STEPS}" \
     --training.dataset_random_seed 1234 \
     --metrics.log_freq 1 \
-    --metrics.no-enable-wandb \
     --metrics.no-enable-tensorboard \
     --job.dump_folder "${OUTPUT_DIR}/train_output" \
     > "${TRAIN_LOG}" 2>&1

@@ -16,7 +16,7 @@ profile_freq = 100
 log_freq = 1
 enable_tensorboard = false
 save_tb_folder = "tb"
-enable_wandb = false
+enable_wandb = true
 
 [model]
 name = "qwen3"

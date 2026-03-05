@@ -238,6 +238,7 @@ setup_environment() {
     export NCCL_DEBUG=$(yaml_get "$config" "environment.nccl_debug")
     export NCCL_SOCKET_IFNAME=$(yaml_get "$config" "environment.nccl_socket_ifname")
     export OMP_NUM_THREADS=$(yaml_get "$config" "environment.omp_num_threads")
+    export WANDB_PROJECT="torchtitan_tests"
 }
 
 # =============================================================================
