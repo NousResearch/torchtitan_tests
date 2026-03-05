@@ -207,6 +207,13 @@ generate_summary() {
     # Benchmark metrics (if available)
     local bench_metrics="${BENCH_METRICS:-{}}"
 
+    # Convergence test result (if available)
+    local conv_result="{}"
+    local conv_result_file="${CI_RUN_LOG_DIR}/convergence_test/convergence_result.json"
+    if [[ -f "${conv_result_file}" ]]; then
+        conv_result=$(tr -d '\n' < "${conv_result_file}" | tr -s ' ')
+    fi
+
     cat > "${SUMMARY_JSON}" <<ENDJSON
 {
   "run_id": "${CI_RUN_ID}",
@@ -221,6 +228,7 @@ generate_summary() {
   "phases": ${phases_json},
   "gpu_stats": ${gpu_stats},
   "benchmark_metrics": ${bench_metrics},
+  "convergence_test": ${conv_result},
   "overall_status": "${final_status}",
   "total_duration_sec": ${total_duration}
 }
@@ -278,7 +286,7 @@ if [[ "${CI_SUITE}" == "all" || "${CI_SUITE}" == "integration" ]]; then
     run_integration_suite "models" "8" "${TIMEOUT_INTEGRATION_TESTS}"
 fi
 
-# --- Phase 5: Reference Benchmark ---
+# --- Phase 4: Reference Benchmark ---
 # Always run a short training benchmark for regression tracking (TPS, memory)
 if [[ "${CI_SUITE}" == "all" || "${CI_SUITE}" == "benchmark" ]]; then
     BENCH_CONFIG=$(yaml_get "${TTCI_CONFIG}" "reference_benchmark.config")
@@ -296,7 +304,7 @@ if [[ "${CI_SUITE}" == "all" || "${CI_SUITE}" == "benchmark" ]]; then
 torchrun --nnodes=1 --nproc_per_node=${BENCH_NGPU:-8} \
     --rdzv_id=${SLURM_JOB_ID}_bench --rdzv_backend=c10d --rdzv_endpoint=localhost:29502 \
     --local-ranks-filter=0 --role rank --tee 3 \
-    train.py --job.config_file ${BENCH_CONFIG} \
+    -m torchtitan.train --job.config_file ${BENCH_CONFIG} \
     --training.steps ${BENCH_STEPS:-20} \
     --job.dump_folder ${BENCH_LOG_DIR} \
     --metrics.enable_wandb=false \
@@ -353,7 +361,29 @@ PYEOF
     fi
 fi
 
-# --- Phase 6: Quality Checks (optional) ---
+# --- Phase 6: Convergence Test ---
+# Deterministic loss comparison: load seed weights, train N steps, compare loss step-by-step
+if [[ "${CI_SUITE}" == "all" || "${CI_SUITE}" == "convergence" ]]; then
+    CONV_ENABLED=$(yaml_get "${TTCI_CONFIG}" "convergence_test.enabled")
+    CONV_TIMEOUT=$(yaml_get "${TTCI_CONFIG}" "convergence_test.timeout")
+
+    if [[ "${CONV_ENABLED}" == "true" ]]; then
+        CONV_OUTPUT_DIR="${CI_RUN_LOG_DIR}/convergence_test"
+        mkdir -p "${CONV_OUTPUT_DIR}"
+
+        run_phase "convergence_test" "${CONV_TIMEOUT:-30m}" \
+            "bash ${CI_DIR}/scripts/convergence_test.sh ${CONV_OUTPUT_DIR}"
+
+        # Capture convergence result into summary
+        CONV_RESULT_FILE="${CONV_OUTPUT_DIR}/convergence_result.json"
+        if [[ -f "${CONV_RESULT_FILE}" ]]; then
+            CONV_RESULT=$(cat "${CONV_RESULT_FILE}" | tr -d '\n' | tr -s ' ')
+            log_info "Convergence result: $(python3 -c "import json,sys; r=json.loads(sys.stdin.read()); print(f'{r[\"status\"].upper()}: {r[\"message\"]}')" <<< "${CONV_RESULT}")"
+        fi
+    fi
+fi
+
+# --- Phase 7: Quality Checks (optional) ---
 if [[ "${CI_QUALITY}" == "true" ]]; then
     run_phase "quality" "10m" \
         "bash ${CI_DIR}/quality/run_quality.sh --ci"

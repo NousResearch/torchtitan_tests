@@ -87,12 +87,12 @@ if not runs:
     sys.exit(0)
 
 if json_mode:
-    report = {"runs": [], "phase_trends": {}, "benchmark_trend": [], "gpu_trends": [], "pass_fail": {}}
+    report = {"runs": [], "phase_trends": {}, "benchmark_trend": [], "convergence_trend": [], "gpu_trends": [], "pass_fail": {}}
 
 # ===========================================================================
 # TABLE 1: Run Overview with Duration & Status
 # ===========================================================================
-phases_all = ['unit_tests', 'distributed_deepep', 'integration_features', 'integration_models']
+phases_all = ['unit_tests', 'distributed_deepep', 'integration_features', 'integration_models', 'reference_benchmark', 'convergence_test']
 
 if not json_mode:
     print("=" * 120)
@@ -278,7 +278,70 @@ elif not json_mode:
     print("  Config: qwen3_30b_a3b_with_deepep.toml (8 GPU, 20 steps)")
 
 # ===========================================================================
-# TABLE 4: GPU Memory Trend (nvidia-smi, aggregate)
+# TABLE 4: Convergence Test (deterministic loss comparison)
+# ===========================================================================
+runs_with_conv = [r for r in runs if r.get('convergence_test') and r['convergence_test'] != {} and r['convergence_test'].get('status')]
+
+if runs_with_conv:
+    if not json_mode:
+        print()
+        print("=" * 110)
+        print("  CONVERGENCE TEST — deterministic loss comparison (seed=42)")
+        print("=" * 110)
+        print(f"  {'Run ID':<18} {'SHA':<9} {'Status':<10} {'Steps':>6} {'Mismatches':>11} {'Max Diff':>12} {'Final Loss':>12} {'vs Ref':>12}")
+        print("  " + "-" * 105)
+
+    for r in runs_with_conv:
+        ct = r['convergence_test']
+        rid = r.get('run_id', '?')
+        sha = r.get('sha', '?')[:7]
+        status = ct.get('status', '?').upper()
+        num_compared = ct.get('num_compared', 0)
+        num_mismatch = ct.get('num_mismatch', 0)
+        max_diff = ct.get('max_diff', 0)
+        final_cur = ct.get('final_loss_cur')
+        final_ref = ct.get('final_loss_ref')
+
+        if status == 'BASELINE':
+            icon = "\U0001f4cb"
+        elif status == 'PASS':
+            icon = "\u2705"
+        else:
+            icon = "\u274c"
+
+        final_str = f"{final_cur:.4f}" if final_cur else "-"
+        ref_delta = ""
+        if final_cur and final_ref:
+            d = abs(final_cur - final_ref)
+            if d > 0:
+                ref_delta = f"diff={d:.6f}"
+
+        if json_mode:
+            report["convergence_trend"].append({
+                "run_id": rid, "sha": sha, "status": status,
+                "num_compared": num_compared, "num_mismatch": num_mismatch,
+                "max_diff": max_diff, "final_loss": final_cur, "final_loss_ref": final_ref
+            })
+        else:
+            mismatch_str = f"{num_mismatch}/{num_compared}" if num_compared else "-"
+            diff_str = f"{max_diff:.8f}" if max_diff > 0 else "0.0"
+            print(f"  {icon} {rid:<16} {sha:<9} {status:<10} {num_compared:>5} {mismatch_str:>11} {diff_str:>12} {final_str:>12} {ref_delta:>12}")
+
+    if not json_mode:
+        pass_ct = sum(1 for r in runs_with_conv if r['convergence_test'].get('status') in ('pass', 'baseline'))
+        fail_ct = sum(1 for r in runs_with_conv if r['convergence_test'].get('status') == 'fail')
+        print("  " + "-" * 105)
+        print(f"  Summary: {pass_ct} pass, {fail_ct} fail out of {len(runs_with_conv)} runs with convergence data")
+
+elif not json_mode:
+    print()
+    print("=" * 80)
+    print("  CONVERGENCE TEST")
+    print("=" * 80)
+    print("  No convergence data yet. First run will create seed checkpoint + baseline.")
+
+# ===========================================================================
+# TABLE 5: GPU Memory Trend (nvidia-smi, aggregate)
 # ===========================================================================
 runs_with_gpu = [r for r in runs if r.get('gpu_stats')]
 
@@ -330,7 +393,7 @@ if runs_with_gpu:
         prev_max_mem = peak_mem
 
 # ===========================================================================
-# TABLE 5: Pass/Fail Rate
+# TABLE 6: Pass/Fail Rate
 # ===========================================================================
 if not json_mode:
     print()
@@ -376,7 +439,7 @@ if json_mode:
     print(json.dumps(report, indent=2))
 else:
     print()
-    print(f"  Analyzed {len(runs)} runs. GPU data: {len(runs_with_gpu)}. Benchmark data: {len(runs_with_bench)}.")
+    print(f"  Analyzed {len(runs)} runs. GPU data: {len(runs_with_gpu)}. Benchmark data: {len(runs_with_bench)}. Convergence data: {len(runs_with_conv)}.")
     print()
 
 PYEOF

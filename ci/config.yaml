@@ -80,6 +80,17 @@ reference_benchmark:
   extra_args: ""
   regression_threshold_pct: 10
 
+convergence_test:
+  enabled: true
+  config: torchtitan/models/qwen3/train_configs/qwen3_30b_a3b_with_deepep.toml
+  ngpu: 8
+  steps: 100
+  seed: 42
+  timeout: 30m
+  seed_checkpoint_dir: ${data_dir}/convergence_seed_checkpoint
+  reference_loss_file: ${data_dir}/convergence_reference_loss.json
+  tolerance: 0.0
+
 benchmarks:
   - name: qwen3_30b_a3b_deepep
     config: torchtitan/models/qwen3/train_configs/qwen3_30b_a3b_with_deepep.toml

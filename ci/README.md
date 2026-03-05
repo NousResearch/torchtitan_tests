@@ -147,7 +147,18 @@ All in `ci/config.yaml`. Key settings:
 | `notifications.discord_webhook_url` | Discord webhook |
 | `benchmarks.*.regression_threshold_pct` | Regression alert threshold |
 
-## Test Phases
+### `ttci report` — Performance & regression tracking
+
+```bash
+ttci report                      # all tables (durations, benchmark, convergence, GPU, pass/fail)
+ttci report --json               # machine-readable JSON
+ttci report --limit 10           # last 10 runs only
+ttci report --since 7d           # last 7 days
+```
+
+## Test Phases (single Slurm job)
+
+All phases run sequentially within one Slurm allocation:
 
 | Phase | What | GPUs | Timeout |
 |-------|------|------|---------|
@@ -155,6 +166,8 @@ All in `ci/config.yaml`. Key settings:
 | distributed_deepep | DeepEP dispatcher via torchrun | 8 | 10m |
 | integration_features | Feature tests (checkpoint, data loading) | 4 | 30m |
 | integration_models | Model tests (Llama, DeepSeek V3, Qwen3) | 8 | 30m |
+| reference_benchmark | qwen3_30b_a3b_deepep 20-step TPS/memory tracking | 8 | 20m |
+| convergence_test | Deterministic 100-step loss comparison from seed weights | 8 | 30m |
 
 ## Discord
 
