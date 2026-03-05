@@ -144,8 +144,8 @@ torchrun \
     --training.dataset_folders "[\"${CONV_DATASET_DIR}\"]" \
     --training.dataset_weights "[1]" \
     --metrics.log_freq 1 \
-    --no-metrics.enable_wandb \
-    --no-metrics.enable_tensorboard \
+    --metrics.no-enable-wandb \
+    --metrics.no-enable-tensorboard \
     --job.dump_folder "${OUTPUT_DIR}/train_output" \
     > "${TRAIN_LOG}" 2>&1
 
