@@ -169,12 +169,16 @@ import re, json, sys
 log_file = sys.argv[1]
 output_file = sys.argv[2]
 
+# Strip ANSI escape codes (color sequences) from text
+ansi_escape = re.compile(r'\x1b\[[0-9;]*m')
+
 step_losses = {}
 
 with open(log_file) as f:
     for line in f:
+        clean = ansi_escape.sub('', line)
         # Match lines like: "step:  1  loss:  8.1234  ..."
-        m = re.search(r'step:\s*(\d+)\s+loss:\s*([\d.]+)', line)
+        m = re.search(r'step:\s*(\d+)\s+loss:\s*([\d.]+)', clean)
         if m:
             step = int(m.group(1))
             loss = float(m.group(2))
