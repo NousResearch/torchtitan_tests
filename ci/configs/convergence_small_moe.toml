@@ -1,0 +1,78 @@
+# Small MoE model config for convergence testing (~286M params)
+# Uses debugmodel_moe_deepep flavor: same code paths as 30B-A3B-deepep
+# but with dim=256, n_layers=4, 128 experts, moe_inter_dim=512
+# Seed checkpoint is ~1.1GB (vs 342GB for 30B)
+
+[job]
+dump_folder = "./outputs"
+description = "Convergence test - small MoE with DeepEP"
+
+[profiling]
+enable_profiling = false
+save_traces_folder = "profile_trace"
+profile_freq = 100
+
+[metrics]
+log_freq = 1
+enable_tensorboard = false
+save_tb_folder = "tb"
+enable_wandb = false
+
+[model]
+name = "qwen3"
+flavor = "debugmodel_moe_deepep"
+hf_assets_path = "./assets/hf/Qwen3-32B"
+
+[optimizer]
+name = "AdamW"
+lr = 8e-4
+eps = 1e-8
+
+[lr_scheduler]
+warmup_steps = 10
+
+[training]
+local_batch_size = 8
+seq_len = 4096
+max_norm = 1.0
+steps = 100
+dataset_type = "nanoset"
+dataset_folders = ["/home/phuc/workspace/moe/small_prs/pr009_slurm_cicd/ci/data/convergence_dataset"]
+dataset_weights = [1]
+
+[parallelism]
+data_parallel_replicate_degree = 1
+data_parallel_shard_degree = -1
+fsdp_reshard_after_forward = "default"
+tensor_parallel_degree = 1
+context_parallel_degree = 1
+expert_parallel_degree = 8
+
+[checkpoint]
+enable = false
+folder = "checkpoint"
+interval = 500
+last_save_model_only = false
+export_dtype = "float16"
+async_mode = "disabled"
+
+[activation_checkpoint]
+mode = "full"
+selective_ac_option = "op"
+
+[compile]
+enable = true
+components = ["model", "loss"]
+
+[quantize.linear.float8]
+enable_fsdp_float8_all_gather = false
+precompute_float8_dynamic_scale_for_fsdp = false
+filter_fqns = ["output"]
+
+[deepep]
+sync_comm_stream = false
+fused_weighted_scatter_add = false
+fused_silu_gate_prob = true
+
+[debug]
+moe_force_load_balance = true

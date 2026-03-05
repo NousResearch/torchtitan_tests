@@ -88,7 +88,10 @@ if [[ ! -d "${SEED_STEP_DIR}" ]] || [[ -z "$(ls -A "${SEED_STEP_DIR}" 2>/dev/nul
     log_info "Creating seed checkpoint (random init weights)..."
     log_info "This runs once with NGPU=1 to save initial model state"
 
-    NGPU=1 LOG_RANK=0 CONFIG_FILE="./${CONV_CONFIG}" \
+    # Use absolute path for config since we're cd'd into TORCHTITAN_DIR
+    CONV_CONFIG_ABS="${PROJECT_ROOT}/${CONV_CONFIG}"
+
+    NGPU=1 LOG_RANK=0 CONFIG_FILE="${CONV_CONFIG_ABS}" \
         ./run_train.sh \
         --checkpoint.enable \
         --checkpoint.create_seed_checkpoint \
@@ -101,6 +104,8 @@ if [[ ! -d "${SEED_STEP_DIR}" ]] || [[ -z "$(ls -A "${SEED_STEP_DIR}" 2>/dev/nul
         --parallelism.expert_parallel_degree 1 \
         --debug.seed "${CONV_SEED}" \
         --training.steps 1 \
+        --training.dataset_folders "[\"${CONV_DATASET_DIR}\"]" \
+        --training.dataset_weights "[1]" \
         > "${OUTPUT_DIR}/seed_checkpoint_creation.log" 2>&1
 
     if [[ ! -d "${SEED_STEP_DIR}" ]]; then
@@ -132,7 +137,7 @@ torchrun \
     --rdzv_endpoint="localhost:${RDZV_PORT}" \
     --local-ranks-filter=0 --role rank --tee 3 \
     -m torchtitan.train \
-    --job.config_file "./${CONV_CONFIG}" \
+    --job.config_file "${PROJECT_ROOT}/${CONV_CONFIG}" \
     --checkpoint.enable \
     --checkpoint.initial_load_path "${SEED_STEP_DIR}" \
     --checkpoint.initial_load_model_only \

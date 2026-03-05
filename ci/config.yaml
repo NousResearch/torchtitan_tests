@@ -82,7 +82,7 @@ reference_benchmark:
 
 convergence_test:
   enabled: true
-  config: torchtitan/models/qwen3/train_configs/qwen3_30b_a3b_with_deepep.toml
+  config: ci/configs/convergence_small_moe.toml
   ngpu: 8
   steps: 100
   seed: 42
