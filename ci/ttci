@@ -24,7 +24,9 @@ ttci — torchtitan CI/CD CLI
 Usage: ttci <command> [options]
 
 Commands:
-  status       Show CI system status (cron jobs, running tests, last results)
+  start        Start autonomous CI daemon (watches commits, PRs, 24h heartbeat)
+  stop         Stop the CI daemon
+  status       Show CI system status (daemon, running tests, last results)
   run          Trigger a test run manually
   config       View or edit configuration
   logs         View and search run logs
@@ -40,6 +42,8 @@ Options:
   --version    Show version
 
 Examples:
+  ttci start                           Start autonomous CI daemon
+  ttci stop                            Stop the daemon
   ttci status                          Show system overview
   ttci run --force                     Trigger 1-node test run
   ttci run --2node                     Trigger 2-node test run
@@ -73,7 +77,7 @@ case "$COMMAND" in
         echo "ttci version ${TTCI_VERSION}"
         exit 0
         ;;
-    status|run|config|logs|history|benchmark|pr|quality|install|uninstall)
+    start|stop|status|run|config|logs|history|benchmark|pr|quality|install|uninstall)
         COMMAND_SCRIPT="${TTCI_COMMANDS_DIR}/${COMMAND}.sh"
         if [[ ! -f "$COMMAND_SCRIPT" ]]; then
             echo "Error: Command script not found: ${COMMAND_SCRIPT}" >&2

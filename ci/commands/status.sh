@@ -11,6 +11,30 @@ load_config
 
 section "CI System Status"
 
+# --- Watchdog Daemon ---
+echo -e "${BOLD}Daemon:${NC}"
+PID_FILE="${CI_STATE_DIR}/watchdog.pid"
+if [[ -f "$PID_FILE" ]]; then
+    WD_PID=$(cat "$PID_FILE")
+    if kill -0 "$WD_PID" 2>/dev/null; then
+        UPTIME=""
+        WD_START=$(stat -c %Y "$PID_FILE" 2>/dev/null || echo "")
+        if [[ -n "$WD_START" ]]; then
+            ELAPSED=$(( $(date +%s) - WD_START ))
+            HOURS=$(( ELAPSED / 3600 ))
+            MINS=$(( (ELAPSED % 3600) / 60 ))
+            UPTIME=" (up ${HOURS}h${MINS}m)"
+        fi
+        echo -e "  ${GREEN}running${NC}  PID ${WD_PID}${UPTIME}"
+        echo "  Log: ${CI_LOG_DIR}/watchdog.log"
+    else
+        echo -e "  ${YELLOW}stale PID${NC} ${WD_PID} (process dead, run 'ttci start')"
+    fi
+else
+    echo -e "  ${DIM}stopped${NC}  (run 'ttci start' to enable autonomous mode)"
+fi
+echo ""
+
 # --- Cron Jobs ---
 echo -e "${BOLD}Cron Jobs:${NC}"
 CRON_LINES=$(crontab -l 2>/dev/null | grep "torchtitan" || echo "")
@@ -22,7 +46,7 @@ if [[ -n "$CRON_LINES" ]]; then
         echo "  ${GREEN}active${NC}  ${schedule}  ${script}"
     done <<< "$CRON_LINES"
 else
-    echo "  ${YELLOW}none installed${NC}  (run 'ttci install' to set up)"
+    echo "  ${DIM}none${NC}  (optional — daemon handles scheduling)"
 fi
 echo ""
 
