@@ -204,6 +204,9 @@ generate_summary() {
         gpu_stats=$("${CI_DIR}/reporters/gpu_report.sh" --json "$GPU_CSV" 2>/dev/null || echo "{}")
     fi
 
+    # Benchmark metrics (if available)
+    local bench_metrics="${BENCH_METRICS:-{}}"
+
     cat > "${SUMMARY_JSON}" <<ENDJSON
 {
   "run_id": "${CI_RUN_ID}",
@@ -217,6 +220,7 @@ generate_summary() {
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "phases": ${phases_json},
   "gpu_stats": ${gpu_stats},
+  "benchmark_metrics": ${bench_metrics},
   "overall_status": "${final_status}",
   "total_duration_sec": ${total_duration}
 }
@@ -274,7 +278,82 @@ if [[ "${CI_SUITE}" == "all" || "${CI_SUITE}" == "integration" ]]; then
     run_integration_suite "models" "8" "${TIMEOUT_INTEGRATION_TESTS}"
 fi
 
-# --- Phase 4: Quality Checks (optional) ---
+# --- Phase 5: Reference Benchmark ---
+# Always run a short training benchmark for regression tracking (TPS, memory)
+if [[ "${CI_SUITE}" == "all" || "${CI_SUITE}" == "benchmark" ]]; then
+    BENCH_CONFIG=$(yaml_get "${TTCI_CONFIG}" "reference_benchmark.config")
+    BENCH_NGPU=$(yaml_get "${TTCI_CONFIG}" "reference_benchmark.ngpu")
+    BENCH_STEPS=$(yaml_get "${TTCI_CONFIG}" "reference_benchmark.steps")
+    BENCH_TIMEOUT=$(yaml_get "${TTCI_CONFIG}" "reference_benchmark.timeout")
+    BENCH_EXTRA=$(yaml_get "${TTCI_CONFIG}" "reference_benchmark.extra_args")
+
+    if [[ -n "$BENCH_CONFIG" ]]; then
+        BENCH_LOG_DIR="${CI_RUN_LOG_DIR}/reference_benchmark"
+        mkdir -p "${BENCH_LOG_DIR}"
+
+        run_phase "reference_benchmark" "${BENCH_TIMEOUT:-20m}" \
+            "cd ${TORCHTITAN_DIR} && source ${VENV_DIR}/bin/activate && \
+torchrun --nnodes=1 --nproc_per_node=${BENCH_NGPU:-8} \
+    --rdzv_id=${SLURM_JOB_ID}_bench --rdzv_backend=c10d --rdzv_endpoint=localhost:29502 \
+    --local-ranks-filter=0 --role rank --tee 3 \
+    train.py --job.config_file ${BENCH_CONFIG} \
+    --training.steps ${BENCH_STEPS:-20} \
+    --job.dump_folder ${BENCH_LOG_DIR} \
+    --metrics.enable_wandb=false \
+    --metrics.log_freq=1 \
+    ${BENCH_EXTRA}"
+
+        # Extract metrics from benchmark log
+        BENCH_PHASE_LOG="${CI_RUN_LOG_DIR}/reference_benchmark.log"
+        if [[ -f "$BENCH_PHASE_LOG" ]]; then
+            BENCH_METRICS=$(python3 - "$BENCH_PHASE_LOG" <<'PYEOF'
+import re, json, sys
+
+log_file = sys.argv[1]
+tps_vals, tflops_vals, mfu_vals, mem_vals = [], [], [], []
+
+with open(log_file) as f:
+    for line in f:
+        m = re.search(r'tps:\s*([\d,]+)', line)
+        if m:
+            tps_vals.append(float(m.group(1).replace(',', '')))
+        m = re.search(r'tflops:\s*([\d,.]+)', line)
+        if m:
+            tflops_vals.append(float(m.group(1).replace(',', '')))
+        m = re.search(r'mfu:\s*([\d.]+)%', line)
+        if m:
+            mfu_vals.append(float(m.group(1)))
+        m = re.search(r'memory:\s*([\d.]+)GiB', line)
+        if m:
+            mem_vals.append(float(m.group(1)))
+
+# Skip first 2 steps (warmup/compile)
+skip = 2
+tps_vals = tps_vals[skip:]
+tflops_vals = tflops_vals[skip:]
+mfu_vals = mfu_vals[skip:]
+
+result = {}
+if tps_vals:
+    result["avg_tps"] = round(sum(tps_vals) / len(tps_vals), 1)
+    result["max_tps"] = round(max(tps_vals), 1)
+if tflops_vals:
+    result["avg_tflops"] = round(sum(tflops_vals) / len(tflops_vals), 2)
+if mfu_vals:
+    result["avg_mfu_pct"] = round(sum(mfu_vals) / len(mfu_vals), 2)
+if mem_vals:
+    result["max_memory_gib"] = round(max(mem_vals), 2)
+result["samples"] = len(tps_vals)
+
+print(json.dumps(result))
+PYEOF
+            )
+            log_info "Benchmark metrics: ${BENCH_METRICS}"
+        fi
+    fi
+fi
+
+# --- Phase 6: Quality Checks (optional) ---
 if [[ "${CI_QUALITY}" == "true" ]]; then
     run_phase "quality" "10m" \
         "bash ${CI_DIR}/quality/run_quality.sh --ci"

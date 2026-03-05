@@ -72,6 +72,14 @@ tests:
     - name: models
       ngpu: 8
 
+reference_benchmark:
+  config: torchtitan/models/qwen3/train_configs/qwen3_30b_a3b_with_deepep.toml
+  ngpu: 8
+  steps: 20
+  timeout: 20m
+  extra_args: ""
+  regression_threshold_pct: 10
+
 benchmarks:
   - name: qwen3_30b_a3b_deepep
     config: torchtitan/models/qwen3/train_configs/qwen3_30b_a3b_with_deepep.toml
