@@ -45,7 +45,7 @@ if [[ "${IDLE}" -ge "${MIN_IDLE_NODES_2N}" ]]; then
             --cpus-per-task="${SLURM_2N_CPUS}" \
             --time="${SLURM_2N_TIME}" \
             --output="${RUN_LOG_DIR}/slurm-%j.out" \
-            --export="ALL,CI_COMMIT_SHA=${LATEST_SHA},CI_RUN_ID=${RUN_ID},CI_RUN_LOG_DIR=${RUN_LOG_DIR},CI_TRIGGER=daily")
+            --export="ALL,CI_DIR=${CI_DIR},CI_COMMIT_SHA=${LATEST_SHA},CI_RUN_ID=${RUN_ID},CI_RUN_LOG_DIR=${RUN_LOG_DIR},CI_TRIGGER=daily")
 
         log_info "Submitted 2-node job ${JOB_ID} (run: ${RUN_ID})"
     else
@@ -74,7 +74,7 @@ if [[ "${IDLE}" -ge "${MIN_IDLE_NODES_1N}" ]] && ! is_job_running "$BENCH_JOB_NA
         --time="${SLURM_1N_TIME}" \
         --begin="now+60minutes" \
         --output="${BENCH_LOG_DIR}/slurm-%j.out" \
-        --export="ALL,CI_COMMIT_SHA=${LATEST_SHA},CI_RUN_ID=${BENCH_RUN_ID},CI_RUN_LOG_DIR=${BENCH_LOG_DIR},CI_BENCHMARK_NAME=qwen3_30b_a3b_deepep")
+        --export="ALL,CI_DIR=${CI_DIR},CI_COMMIT_SHA=${LATEST_SHA},CI_RUN_ID=${BENCH_RUN_ID},CI_RUN_LOG_DIR=${BENCH_LOG_DIR},CI_BENCHMARK_NAME=qwen3_30b_a3b_deepep")
 
     log_info "Submitted benchmark job ${BENCH_JOB_ID} (run: ${BENCH_RUN_ID}, starts in 60min)"
 else

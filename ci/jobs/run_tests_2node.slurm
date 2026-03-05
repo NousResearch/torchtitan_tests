@@ -17,8 +17,14 @@
 # Uses srun + torchrun for cross-node coordination
 # =============================================================================
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../lib/common.sh"
+# Resolve CI_DIR: use exported env var (from sbatch) or fall back to relative path
+if [[ -n "${CI_DIR:-}" ]]; then
+    SCRIPT_DIR="${CI_DIR}/jobs"
+else
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    CI_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+fi
+source "${CI_DIR}/lib/common.sh"
 load_config
 setup_environment
 
@@ -55,7 +61,7 @@ log_info "All nodes: ${nodes[*]}"
 # =============================================================================
 # GPU Monitoring (on head node only)
 # =============================================================================
-source "${SCRIPT_DIR}/../lib/gpu_monitor.sh"
+source "${CI_DIR}/lib/gpu_monitor.sh"
 start_gpu_monitor "$GPU_CSV"
 
 # =============================================================================
@@ -65,7 +71,7 @@ handle_preemption() {
     log_error "PREEMPTED by Slurm (USR1 signal) at $(date)"
     stop_gpu_monitor
     generate_summary "preempted"
-    "${SCRIPT_DIR}/../reporters/discord.sh" preempted "${GIT_BRANCH}" "${CI_COMMIT_SHA}" "${CI_RUN_ID}" "${SUMMARY_FILE}" || true
+    "${CI_DIR}/reporters/discord.sh" preempted "${GIT_BRANCH}" "${CI_COMMIT_SHA}" "${CI_RUN_ID}" "${SUMMARY_FILE}" || true
     exit 1
 }
 trap handle_preemption USR1
@@ -199,7 +205,7 @@ generate_summary() {
 
     local gpu_stats="{}"
     if [[ -f "$GPU_CSV" ]] && [[ -s "$GPU_CSV" ]]; then
-        gpu_stats=$("${SCRIPT_DIR}/../reporters/gpu_report.sh" --json "$GPU_CSV" 2>/dev/null || echo "{}")
+        gpu_stats=$("${CI_DIR}/reporters/gpu_report.sh" --json "$GPU_CSV" 2>/dev/null || echo "{}")
     fi
 
     cat > "${SUMMARY_JSON}" <<ENDJSON
@@ -265,10 +271,10 @@ if [[ "${OVERALL_STATUS}" == "pass" ]]; then
     log_info "Updated last tested SHA to ${CI_COMMIT_SHA:0:7}"
 fi
 
-"${SCRIPT_DIR}/../reporters/discord.sh" "${OVERALL_STATUS}" "${GIT_BRANCH}" "${CI_COMMIT_SHA}" "${CI_RUN_ID}" "${SUMMARY_FILE}" || true
+"${CI_DIR}/reporters/discord.sh" "${OVERALL_STATUS}" "${GIT_BRANCH}" "${CI_COMMIT_SHA}" "${CI_RUN_ID}" "${SUMMARY_FILE}" || true
 
 if [[ -f "$GPU_CSV" ]] && [[ -s "$GPU_CSV" ]]; then
-    "${SCRIPT_DIR}/../reporters/gpu_report.sh" "$GPU_CSV" > "${CI_RUN_LOG_DIR}/gpu_report.txt" 2>/dev/null || true
+    "${CI_DIR}/reporters/gpu_report.sh" "$GPU_CSV" > "${CI_RUN_LOG_DIR}/gpu_report.txt" 2>/dev/null || true
 fi
 
 log_info "CI run complete: ${OVERALL_STATUS}"

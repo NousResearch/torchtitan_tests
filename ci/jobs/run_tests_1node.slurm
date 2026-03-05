@@ -17,8 +17,14 @@
 # Exports: CI_COMMIT_SHA, CI_RUN_ID, CI_RUN_LOG_DIR, CI_TRIGGER, CI_PR_NUMBER
 # =============================================================================
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../lib/common.sh"
+# Resolve CI_DIR: use exported env var (from sbatch) or fall back to relative path
+if [[ -n "${CI_DIR:-}" ]]; then
+    SCRIPT_DIR="${CI_DIR}/jobs"
+else
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    CI_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+fi
+source "${CI_DIR}/lib/common.sh"
 load_config
 setup_environment
 
@@ -47,7 +53,7 @@ START_TIME=$(date +%s)
 # =============================================================================
 # GPU Monitoring
 # =============================================================================
-source "${SCRIPT_DIR}/../lib/gpu_monitor.sh"
+source "${CI_DIR}/lib/gpu_monitor.sh"
 start_gpu_monitor "$GPU_CSV"
 
 # =============================================================================
@@ -58,7 +64,7 @@ handle_preemption() {
     log_error "PREEMPTED by Slurm (USR1 signal) at $(date)"
     stop_gpu_monitor
     generate_summary "preempted"
-    "${SCRIPT_DIR}/../reporters/discord.sh" preempted "${GIT_BRANCH}" "${CI_COMMIT_SHA}" "${CI_RUN_ID}" "${SUMMARY_FILE}" || true
+    "${CI_DIR}/reporters/discord.sh" preempted "${GIT_BRANCH}" "${CI_COMMIT_SHA}" "${CI_RUN_ID}" "${SUMMARY_FILE}" || true
     exit 1
 }
 trap handle_preemption USR1
@@ -195,7 +201,7 @@ generate_summary() {
     # GPU stats (if available)
     local gpu_stats="{}"
     if [[ -f "$GPU_CSV" ]] && [[ -s "$GPU_CSV" ]]; then
-        gpu_stats=$("${SCRIPT_DIR}/../reporters/gpu_report.sh" --json "$GPU_CSV" 2>/dev/null || echo "{}")
+        gpu_stats=$("${CI_DIR}/reporters/gpu_report.sh" --json "$GPU_CSV" 2>/dev/null || echo "{}")
     fi
 
     cat > "${SUMMARY_JSON}" <<ENDJSON
@@ -264,10 +270,6 @@ fi
 
 # --- Phase 3: Integration Tests ---
 if [[ "${CI_SUITE}" == "all" || "${CI_SUITE}" == "integration" ]]; then
-    # Read integration suites from config
-    local_ngpu_features=$(yaml_get "${TTCI_CONFIG}" "tests.integration_suites" 2>/dev/null || echo "")
-
-    # Default: features suite with 4 GPUs, models suite with 8 GPUs
     run_integration_suite "features" "4" "${TIMEOUT_INTEGRATION_TESTS}"
     run_integration_suite "models" "8" "${TIMEOUT_INTEGRATION_TESTS}"
 fi
@@ -275,7 +277,7 @@ fi
 # --- Phase 4: Quality Checks (optional) ---
 if [[ "${CI_QUALITY}" == "true" ]]; then
     run_phase "quality" "10m" \
-        "bash ${SCRIPT_DIR}/../quality/run_quality.sh --ci"
+        "bash ${CI_DIR}/quality/run_quality.sh --ci"
 fi
 
 # =============================================================================
@@ -292,16 +294,16 @@ fi
 
 # Update PR state if this was a PR run
 if [[ -n "${CI_PR_NUMBER}" ]]; then
-    source "${SCRIPT_DIR}/../lib/github_api.sh"
+    source "${CI_DIR}/lib/github_api.sh"
     update_pr_state "${CI_PR_NUMBER}" "${CI_COMMIT_SHA}" "${CI_RUN_ID}" "${OVERALL_STATUS}"
 fi
 
 # Send notifications
-"${SCRIPT_DIR}/../reporters/discord.sh" "${OVERALL_STATUS}" "${GIT_BRANCH}" "${CI_COMMIT_SHA}" "${CI_RUN_ID}" "${SUMMARY_FILE}" || true
+"${CI_DIR}/reporters/discord.sh" "${OVERALL_STATUS}" "${GIT_BRANCH}" "${CI_COMMIT_SHA}" "${CI_RUN_ID}" "${SUMMARY_FILE}" || true
 
 # Generate GPU report
 if [[ -f "$GPU_CSV" ]] && [[ -s "$GPU_CSV" ]]; then
-    "${SCRIPT_DIR}/../reporters/gpu_report.sh" "$GPU_CSV" > "${CI_RUN_LOG_DIR}/gpu_report.txt" 2>/dev/null || true
+    "${CI_DIR}/reporters/gpu_report.sh" "$GPU_CSV" > "${CI_RUN_LOG_DIR}/gpu_report.txt" 2>/dev/null || true
 fi
 
 log_info "CI run complete: ${OVERALL_STATUS}"

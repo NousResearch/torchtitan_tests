@@ -18,8 +18,14 @@
 # GPU monitoring at 1-second intervals.
 # =============================================================================
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR}/../lib/common.sh"
+# Resolve CI_DIR: use exported env var (from sbatch) or fall back to relative path
+if [[ -n "${CI_DIR:-}" ]]; then
+    SCRIPT_DIR="${CI_DIR}/jobs"
+else
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    CI_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+fi
+source "${CI_DIR}/lib/common.sh"
 load_config
 setup_environment
 
@@ -39,14 +45,14 @@ START_TIME=$(date +%s)
 # =============================================================================
 # GPU Monitoring (1-second intervals for benchmarks)
 # =============================================================================
-source "${SCRIPT_DIR}/../lib/gpu_monitor.sh"
+source "${CI_DIR}/lib/gpu_monitor.sh"
 start_gpu_monitor "$GPU_CSV" 1
 
 # Preemption handler
 handle_preemption() {
     log_error "PREEMPTED during benchmark at $(date)"
     stop_gpu_monitor
-    "${SCRIPT_DIR}/../reporters/discord.sh" preempted "${GIT_BRANCH}" "${CI_COMMIT_SHA}" "${CI_RUN_ID}" "" || true
+    "${CI_DIR}/reporters/discord.sh" preempted "${GIT_BRANCH}" "${CI_COMMIT_SHA}" "${CI_RUN_ID}" "" || true
     exit 1
 }
 trap handle_preemption USR1
@@ -161,7 +167,7 @@ stop_gpu_monitor
 
 GPU_STATS="{}"
 if [[ -f "$GPU_CSV" ]] && [[ -s "$GPU_CSV" ]]; then
-    GPU_STATS=$("${SCRIPT_DIR}/../reporters/gpu_report.sh" --json "$GPU_CSV" 2>/dev/null || echo "{}")
+    GPU_STATS=$("${CI_DIR}/reporters/gpu_report.sh" --json "$GPU_CSV" 2>/dev/null || echo "{}")
 fi
 
 # =============================================================================
@@ -183,7 +189,7 @@ log_info "Benchmark result saved to benchmarks.jsonl"
 # =============================================================================
 REGRESSION_RESULT=""
 if [[ "${BENCH_STATUS}" == "pass" ]]; then
-    REGRESSION_RESULT=$("${SCRIPT_DIR}/../reporters/regression.sh" \
+    REGRESSION_RESULT=$("${CI_DIR}/reporters/regression.sh" \
         "${CI_BENCHMARK_NAME}" "${TPS}" "${MFU}" "${TFLOPS}" "${MAX_MEMORY_GIB}" \
         2>/dev/null || echo "")
 
@@ -222,11 +228,11 @@ cat "${CI_RUN_LOG_DIR}/summary.txt"
 
 # GPU report
 if [[ -f "$GPU_CSV" ]] && [[ -s "$GPU_CSV" ]]; then
-    "${SCRIPT_DIR}/../reporters/gpu_report.sh" "$GPU_CSV" > "${CI_RUN_LOG_DIR}/gpu_report.txt" 2>/dev/null || true
+    "${CI_DIR}/reporters/gpu_report.sh" "$GPU_CSV" > "${CI_RUN_LOG_DIR}/gpu_report.txt" 2>/dev/null || true
 fi
 
 # Discord notification
-"${SCRIPT_DIR}/../reporters/discord.sh" "${BENCH_STATUS}" "${GIT_BRANCH}" "${CI_COMMIT_SHA}" "${CI_RUN_ID}" "${CI_RUN_LOG_DIR}/summary.txt" || true
+"${CI_DIR}/reporters/discord.sh" "${BENCH_STATUS}" "${GIT_BRANCH}" "${CI_COMMIT_SHA}" "${CI_RUN_ID}" "${CI_RUN_LOG_DIR}/summary.txt" || true
 
 log_info "Benchmark complete: ${BENCH_STATUS}"
 exit $([[ "${BENCH_STATUS}" == "pass" ]] && echo 0 || echo 1)

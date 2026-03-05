@@ -117,7 +117,7 @@ else:
             --cpus-per-task="${SLURM_1N_CPUS}" \
             --time="${SLURM_1N_TIME}" \
             --output="${RUN_LOG_DIR}/slurm-%j.out" \
-            --export="ALL,CI_COMMIT_SHA=${PR_SHA},CI_RUN_ID=${RUN_ID},CI_RUN_LOG_DIR=${RUN_LOG_DIR},CI_TRIGGER=pr,CI_PR_NUMBER=${PR_NUM}")
+            --export="ALL,CI_DIR=${CI_DIR},CI_COMMIT_SHA=${PR_SHA},CI_RUN_ID=${RUN_ID},CI_RUN_LOG_DIR=${RUN_LOG_DIR},CI_TRIGGER=pr,CI_PR_NUMBER=${PR_NUM}")
 
         log_info "Submitted PR test job ${JOB_ID} for PR #${PR_NUM} (run: ${RUN_ID})"
     fi

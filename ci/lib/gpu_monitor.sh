@@ -6,8 +6,13 @@
 [[ -n "${_TTCI_GPU_MONITOR_LOADED:-}" ]] && return 0
 _TTCI_GPU_MONITOR_LOADED=1
 
-SCRIPT_DIR_GPU="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR_GPU}/common.sh"
+# Source common.sh — use CI_DIR if available (for Slurm jobs)
+if [[ -n "${CI_DIR:-}" ]]; then
+    source "${CI_DIR}/lib/common.sh"
+else
+    SCRIPT_DIR_GPU="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    source "${SCRIPT_DIR_GPU}/common.sh"
+fi
 
 GPU_MONITOR_PID_FILE="${CI_STATE_DIR:-.}/.gpu_monitor.pid"
 

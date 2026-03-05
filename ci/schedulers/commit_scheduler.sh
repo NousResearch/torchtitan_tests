@@ -67,7 +67,7 @@ JOB_ID=$(submit_job "${SCRIPT_DIR}/../jobs/run_tests_1node.slurm" \
     --cpus-per-task="${SLURM_1N_CPUS}" \
     --time="${SLURM_1N_TIME}" \
     --output="${RUN_LOG_DIR}/slurm-%j.out" \
-    --export="ALL,CI_COMMIT_SHA=${LATEST_SHA},CI_RUN_ID=${RUN_ID},CI_RUN_LOG_DIR=${RUN_LOG_DIR},CI_TRIGGER=commit")
+    --export="ALL,CI_DIR=${CI_DIR},CI_COMMIT_SHA=${LATEST_SHA},CI_RUN_ID=${RUN_ID},CI_RUN_LOG_DIR=${RUN_LOG_DIR},CI_TRIGGER=commit")
 
 log_info "Submitted job ${JOB_ID} for commit ${LATEST_SHA:0:7} (run: ${RUN_ID})"
 

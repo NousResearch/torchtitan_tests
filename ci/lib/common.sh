@@ -42,8 +42,12 @@ log_debug() {
 # =============================================================================
 # YAML parser — lightweight, handles simple key-value + lists
 # =============================================================================
-# Resolve CI_DIR for config path
-TTCI_CI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# Resolve CI_DIR for config path — prefer CI_DIR env var (set by sbatch --export)
+if [[ -n "${CI_DIR:-}" ]]; then
+    TTCI_CI_DIR="${CI_DIR}"
+else
+    TTCI_CI_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+fi
 TTCI_CONFIG="${TTCI_CI_DIR}/config.yaml"
 
 # yaml_get <file> <dotted.key> — extract a scalar value from YAML

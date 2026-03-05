@@ -8,8 +8,12 @@
 [[ -n "${_TTCI_GITHUB_API_LOADED:-}" ]] && return 0
 _TTCI_GITHUB_API_LOADED=1
 
-SCRIPT_DIR_GH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR_GH}/common.sh"
+if [[ -n "${CI_DIR:-}" ]]; then
+    source "${CI_DIR}/lib/common.sh"
+else
+    SCRIPT_DIR_GH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    source "${SCRIPT_DIR_GH}/common.sh"
+fi
 
 GITHUB_API_BASE="https://api.github.com"
 

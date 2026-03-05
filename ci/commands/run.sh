@@ -122,7 +122,7 @@ if [[ -n "$BENCHMARK" ]]; then
             --cpus-per-task="${SLURM_1N_CPUS}" \
             --time="${SLURM_1N_TIME}" \
             --output="${RUN_LOG_DIR}/slurm-%j.out" \
-            --export="ALL,CI_COMMIT_SHA=${COMMIT_SHA},CI_RUN_ID=${RUN_ID},CI_RUN_LOG_DIR=${RUN_LOG_DIR},CI_BENCHMARK_NAME=${BENCHMARK}")
+            --export="ALL,CI_DIR=${CI_DIR},CI_COMMIT_SHA=${COMMIT_SHA},CI_RUN_ID=${RUN_ID},CI_RUN_LOG_DIR=${RUN_LOG_DIR},CI_BENCHMARK_NAME=${BENCHMARK}")
 
         log_info "Benchmark job submitted: ${JOB_ID}"
 
@@ -206,7 +206,7 @@ else
         --cpus-per-task="${CPUS}" \
         --time="${TIME_LIMIT}" \
         --output="${RUN_LOG_DIR}/slurm-%j.out" \
-        --export="ALL,CI_COMMIT_SHA=${COMMIT_SHA},CI_RUN_ID=${RUN_ID},CI_RUN_LOG_DIR=${RUN_LOG_DIR},CI_TRIGGER=${TRIGGER},CI_PR_NUMBER=${PR_NUMBER},CI_SUITE=${SUITE},CI_QUALITY=${QUALITY}")
+        --export="ALL,CI_DIR=${CI_DIR},CI_COMMIT_SHA=${COMMIT_SHA},CI_RUN_ID=${RUN_ID},CI_RUN_LOG_DIR=${RUN_LOG_DIR},CI_TRIGGER=${TRIGGER},CI_PR_NUMBER=${PR_NUMBER},CI_SUITE=${SUITE},CI_QUALITY=${QUALITY}")
 
     log_info "Job submitted: ${JOB_ID} (run: ${RUN_ID})"
 

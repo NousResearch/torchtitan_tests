@@ -6,8 +6,12 @@
 [[ -n "${_TTCI_SLURM_HELPERS_LOADED:-}" ]] && return 0
 _TTCI_SLURM_HELPERS_LOADED=1
 
-SCRIPT_DIR_SLURM="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-source "${SCRIPT_DIR_SLURM}/common.sh"
+if [[ -n "${CI_DIR:-}" ]]; then
+    source "${CI_DIR}/lib/common.sh"
+else
+    SCRIPT_DIR_SLURM="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    source "${SCRIPT_DIR_SLURM}/common.sh"
+fi
 
 # Submit a Slurm job
 # Usage: submit_job <slurm_script> [extra_sbatch_args...]
