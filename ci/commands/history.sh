@@ -46,15 +46,20 @@ if [[ ! -f "$RUNS_FILE" ]] || [[ ! -s "$RUNS_FILE" ]]; then
     exit 0
 fi
 
-python3 -c "
+# Convert bash booleans for python
+PY_JSON=$([[ "$JSON_MODE" == "true" ]] && echo "1" || echo "0")
+PY_FAIL=$([[ "$FAILURES_ONLY" == "true" ]] && echo "1" || echo "0")
+
+python3 - "$RUNS_FILE" "$PY_JSON" "$PY_FAIL" "$PR_FILTER" "$SINCE" "$LIMIT" <<'PYEOF'
 import json, sys
 from datetime import datetime, timedelta
 
-json_mode = ${JSON_MODE}
-failures_only = ${FAILURES_ONLY}
-pr_filter = '${PR_FILTER}' or None
-since_str = '${SINCE}' or None
-limit = ${LIMIT}
+runs_file = sys.argv[1]
+json_mode = sys.argv[2] == "1"
+failures_only = sys.argv[3] == "1"
+pr_filter = sys.argv[4] or None
+since_str = sys.argv[5] or None
+limit = int(sys.argv[6])
 
 # Parse since period
 since_dt = None
@@ -68,7 +73,7 @@ if since_str:
 
 # Read all runs
 runs = []
-with open('${RUNS_FILE}') as f:
+with open(runs_file) as f:
     for line in f:
         line = line.strip()
         if not line:
@@ -95,7 +100,6 @@ for run in runs:
             pass
     filtered.append(run)
 
-# Limit
 filtered = filtered[-limit:]
 
 if json_mode:
@@ -108,13 +112,12 @@ if not filtered:
     sys.exit(0)
 
 # Table output
-print(f\"{'#':<4} {'Timestamp':<20} {'Nodes':>5} {'Trigger':<12} {'SHA':<9} {'Status':<8} {'Duration':>8} {'Phases'}\")
+print(f"{'#':<4} {'Timestamp':<20} {'Nodes':>5} {'Trigger':<12} {'SHA':<9} {'Status':<8} {'Duration':>8} {'Phases'}")
 print('-' * 100)
 
 for i, run in enumerate(filtered):
     status = run.get('overall_status', '?').upper()
-    icon = '✅' if status == 'PASS' else '❌' if status == 'FAIL' else '🔄'
-    rid = run.get('run_id', '?')
+    icon = '\u2705' if status == 'PASS' else '\u274c' if status == 'FAIL' else '\U0001f504'
     sha = run.get('sha', '?')[:7]
     trigger = run.get('trigger', '?')
     pr = run.get('pr_number')
@@ -136,4 +139,4 @@ for i, run in enumerate(filtered):
     print(f'{icon}  {ts:<20} {str(nodes):>5} {trigger_str:<12} {sha:<9} {status:<8} {dur:>6}s {phases_str}')
 
 print(f'\nTotal: {len(filtered)} runs')
-" 2>/dev/null
+PYEOF
